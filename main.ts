@@ -34,16 +34,38 @@ function shouldInsertAfter(block: ListItemCache | SectionCache) {
 }
 
 export default class MyPlugin extends Plugin {
+
+  copiedFile: TFile | null = null;
+  copiedSubPath: string | null = null;
+  copiedIsHeading: boolean = false;
+
   async onload() {
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor, view) => {
+
+        if (!((this.copiedFile === null)||(this.copiedSubPath===null))) {
+          menu.addItem((item) => {
+            item
+              .setTitle(this.copiedIsHeading?"Paste link to heading":"Paste link to block")
+              .setIcon("links-going-out")
+              .onClick(() => this.handlePaste(view.file, editor, false));
+          });
+
+          menu.addItem((item) => {
+            item
+              .setTitle(this.copiedIsHeading?"Paste heading embed":"Paste block embed")
+              .setIcon("links-going-out")
+              .onClick(() => this.handlePaste(view.file, editor, true));
+          });
+        }
+
         const block = this.getBlock(editor, view.file);
 
         if (!block) return;
 
         const isHeading = !!(block as any).heading;
 
-        const onClick = (isEmbed: boolean) => {
+        const onCopy = (isEmbed: boolean) => {
           if (isHeading) {
             this.handleHeading(view.file, block as HeadingCache, isEmbed);
           } else {
@@ -60,17 +82,33 @@ export default class MyPlugin extends Plugin {
           item
             .setTitle(isHeading ? "Copy link to heading" : "Copy link to block")
             .setIcon("links-coming-in")
-            .onClick(() => onClick(false));
+            .onClick(() => onCopy(false));
         });
 
         menu.addItem((item) => {
           item
             .setTitle(isHeading ? "Copy heading embed" : "Copy block embed")
             .setIcon("links-coming-in")
-            .onClick(() => onClick(true));
+            .onClick(() => onCopy(true));
         });
       })
     );
+
+    this.addCommand({
+      id: "paste-link-to-block",
+      name: "Paste link to last copied block or heading",
+      editorCheckCallback: (isChecking, editor, view) => {
+        return this.handlePasteCommand(isChecking, editor, view, false);
+      },
+    });
+
+    this.addCommand({
+      id: "paste-embed-to-block",
+      name: "Copy embed to last copied block or heading",
+      editorCheckCallback: (isChecking, editor, view) => {
+        return this.handlePasteCommand(isChecking, editor, view, true);
+      },
+    });
 
     this.addCommand({
       id: "copy-link-to-block",
@@ -87,6 +125,19 @@ export default class MyPlugin extends Plugin {
         return this.handleCommand(isChecking, editor, view, true);
       },
     });
+    
+
+  }
+
+  handlePasteCommand(isChecking: boolean, editor: Editor, view: MarkdownView, isEmbed: boolean) {
+    const shouldAbort = (this.copiedFile === null) || (this.copiedSubPath === null);
+    if (isChecking) {
+      return shouldAbort;
+    }
+    if (shouldAbort){
+      return
+    }
+    this.handlePaste(view.file, editor, isEmbed);
   }
 
   handleCommand(
@@ -147,11 +198,16 @@ export default class MyPlugin extends Plugin {
   }
 
   handleHeading(file: TFile, block: HeadingCache, isEmbed: boolean) {
+
+    this.copiedFile = file;
+    this.copiedSubPath = "#" + sanitizeHeading(block.heading);
+    this.copiedIsHeading = true;
+
     navigator.clipboard.writeText(
       `${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
-        file,
+        this.copiedFile,
         "",
-        "#" + sanitizeHeading(block.heading)
+        this.copiedSubPath
       )}`
     );
   }
@@ -163,14 +219,18 @@ export default class MyPlugin extends Plugin {
     isEmbed: boolean
   ) {
     const blockId = block.id;
+    this.copiedFile = file;
+    this.copiedIsHeading = false;
 
     // Copy existing block id
     if (blockId) {
+      this.copiedSubPath = "#^" + blockId;
+
       return navigator.clipboard.writeText(
         `${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
-          file,
+          this.copiedFile,
           "",
-          "#^" + blockId
+          this.copiedSubPath
         )}`
       );
     }
@@ -183,14 +243,29 @@ export default class MyPlugin extends Plugin {
     };
 
     const id = generateId();
+    this.copiedSubPath = "#^" + id;
     const spacer = shouldInsertAfter(block) ? "\n\n" : " ";
 
     editor.replaceRange(`${spacer}^${id}`, end);
     navigator.clipboard.writeText(
       `${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
-        file,
+        this.copiedFile,
         "",
-        "#^" + id
+        this.copiedSubPath
+      )}`
+    );
+  }
+
+  handlePaste(file: TFile, editor: Editor, isEmbed: boolean) {
+    if ((this.copiedFile === null) || (this.copiedSubPath === null)) {
+      return;
+    }
+
+    return editor.replaceSelection(
+      `${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
+        this.copiedFile,
+        file.path,
+        this.copiedSubPath
       )}`
     );
   }

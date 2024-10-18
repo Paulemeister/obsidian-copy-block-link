@@ -47,14 +47,14 @@ export default class MyPlugin extends Plugin {
           menu.addItem((item) => {
             item
               .setTitle(this.copiedisHeading?"Paste link to heading":"Paste link to block")
-              .setIcon("links-coming-in")
+              .setIcon("links-going-out")
               .onClick(() => this.handlePaste(view.file, editor, false));
           });
 
           menu.addItem((item) => {
             item
               .setTitle(this.copiedisHeading?"Paste heading embed":"Paste block embed")
-              .setIcon("links-coming-in")
+              .setIcon("links-going-out")
               .onClick(() => this.handlePaste(view.file, editor, true));
           });
         }

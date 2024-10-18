@@ -37,7 +37,7 @@ export default class MyPlugin extends Plugin {
 
   copiedFile: TFile | null = null;
   copiedSubPath: string | null = null;
-  copiedisHeading: boolean = false;
+  copiedIsHeading: boolean = false;
 
   async onload() {
     this.registerEvent(
@@ -46,14 +46,14 @@ export default class MyPlugin extends Plugin {
         if (!((this.copiedFile === null)||(this.copiedSubPath===null))) {
           menu.addItem((item) => {
             item
-              .setTitle(this.copiedisHeading?"Paste link to heading":"Paste link to block")
+              .setTitle(this.copiedIsHeading?"Paste link to heading":"Paste link to block")
               .setIcon("links-going-out")
               .onClick(() => this.handlePaste(view.file, editor, false));
           });
 
           menu.addItem((item) => {
             item
-              .setTitle(this.copiedisHeading?"Paste heading embed":"Paste block embed")
+              .setTitle(this.copiedIsHeading?"Paste heading embed":"Paste block embed")
               .setIcon("links-going-out")
               .onClick(() => this.handlePaste(view.file, editor, true));
           });
@@ -201,6 +201,7 @@ export default class MyPlugin extends Plugin {
 
     this.copiedFile = file;
     this.copiedSubPath = "#" + sanitizeHeading(block.heading);
+    this.copiedIsHeading = true;
 
     navigator.clipboard.writeText(
       `${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
@@ -219,6 +220,7 @@ export default class MyPlugin extends Plugin {
   ) {
     const blockId = block.id;
     this.copiedFile = file;
+    this.copiedIsHeading = false;
 
     // Copy existing block id
     if (blockId) {

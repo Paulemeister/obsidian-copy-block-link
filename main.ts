@@ -34,25 +34,49 @@ function shouldInsertAfter(block: ListItemCache | SectionCache) {
 }
 
 export default class MyPlugin extends Plugin {
+  copiedFile: TFile|null = null;
+  copiedSubPath: string|null = null;
   async onload() {
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor, view) => {
-        const block = this.getBlock(editor, view.file);
+        const block = this.getBlock(editor, view.file); 
+
+        if (!(this.copiedFile === null)) {
+          menu.addItem((item) => {
+            item
+              .setTitle("Paste link")
+              .setIcon("links-coming-in")
+              .onClick(() => onClick(false, true));
+          });
+
+          menu.addItem((item) => {
+            item
+              .setTitle("Paste embed")
+              .setIcon("links-coming-in")
+              .onClick(() => onClick(true, true));
+          });
+        }
+
 
         if (!block) return;
 
         const isHeading = !!(block as any).heading;
 
-        const onClick = (isEmbed: boolean) => {
-          if (isHeading) {
-            this.handleHeading(view.file, block as HeadingCache, isEmbed);
-          } else {
-            this.handleBlock(
-              view.file,
-              editor,
-              block as SectionCache | ListItemCache,
-              isEmbed
-            );
+        const onClick = (isEmbed: boolean,isPaste: boolean) => {
+          if (isPaste) { 
+            this.handlePaste(view.file,editor,isEmbed);
+          }
+          else {
+            if (isHeading) {
+              this.handleHeading(view.file, block as HeadingCache, isEmbed);
+            } else {
+              this.handleBlock(
+                view.file,
+                editor,
+                block as SectionCache | ListItemCache,
+                isEmbed
+              );
+            }
           }
         };
 
@@ -60,34 +84,34 @@ export default class MyPlugin extends Plugin {
           item
             .setTitle(isHeading ? "Copy link to heading" : "Copy link to block")
             .setIcon("links-coming-in")
-            .onClick(() => onClick(false));
+            .onClick(() => onClick(false,false));
         });
 
         menu.addItem((item) => {
           item
             .setTitle(isHeading ? "Copy heading embed" : "Copy block embed")
             .setIcon("links-coming-in")
-            .onClick(() => onClick(true));
+            .onClick(() => onClick(true,false));
         });
       })
     );
 
-    this.addCommand({
-      id: "copy-link-to-block",
-      name: "Copy link to current block or heading",
-      editorCheckCallback: (isChecking, editor, view) => {
-        return this.handleCommand(isChecking, editor, view, false);
-      },
-    });
+  //   this.addCommand({
+  //     id: "copy-link-to-block",
+  //     name: "Copy link to current block or heading",
+  //     editorCheckCallback: (isChecking, editor, view) => {
+  //       return this.handleCommand(isChecking, editor, view, false);
+  //     },
+  //   });
 
-    this.addCommand({
-      id: "copy-embed-to-block",
-      name: "Copy embed to current block or heading",
-      editorCheckCallback: (isChecking, editor, view) => {
-        return this.handleCommand(isChecking, editor, view, true);
-      },
-    });
-  }
+  //   this.addCommand({
+  //     id: "copy-embed-to-block",
+  //     name: "Copy embed to current block or heading",
+  //     editorCheckCallback: (isChecking, editor, view) => {
+  //       return this.handleCommand(isChecking, editor, view, true);
+  //     },
+  //   });
+   }
 
   handleCommand(
     isChecking: boolean,
@@ -146,14 +170,34 @@ export default class MyPlugin extends Plugin {
     return block;
   }
 
-  handleHeading(file: TFile, block: HeadingCache, isEmbed: boolean) {
-    navigator.clipboard.writeText(
+  handlePaste(file:TFile,editor:Editor,isEmbed:boolean){
+    if (this.copiedFile ===null){
+      return;
+    }
+    if (this.copiedSubPath===null){
+      return;
+    }
+
+    return editor.replaceSelection(
       `${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
-        file,
-        "",
-        "#" + sanitizeHeading(block.heading)
+        this.copiedFile,
+        file.path,
+        this.copiedSubPath
       )}`
     );
+  }
+
+  handleHeading(file: TFile, block: HeadingCache, isEmbed: boolean) {
+    
+      this.copiedFile = file;
+      this.copiedSubPath ="#" + sanitizeHeading(block.heading)
+    
+    navigator.clipboard.writeText(`${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
+        this.copiedFile,
+        "",
+        this.copiedSubPath
+      )}`);
+    
   }
 
   handleBlock(
@@ -166,11 +210,14 @@ export default class MyPlugin extends Plugin {
 
     // Copy existing block id
     if (blockId) {
+      this.copiedFile = file;
+      this.copiedSubPath ="#^" + blockId;
+      
       return navigator.clipboard.writeText(
         `${isEmbed ? "!" : ""}${this.app.fileManager.generateMarkdownLink(
-          file,
+          this.copiedFile,
           "",
-          "#^" + blockId
+          this.copiedSubPath
         )}`
       );
     }
